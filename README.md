@@ -56,16 +56,16 @@ cloud_detective.py [-h] [-d DNS] [-w WORKERS] [-o OUTPUT] files [files ...]
 
 ```
 
-# ⚠️ Known Issues
+## ⚠️ Known Issues
 
 By using `Whatweb`, we sometimes get false positives. For example, websites that use Google Fonts or similar technologies might be incorrectly identified as being hosted on Google Cloud.
 
 I might update this in the future, but these false positives are usually easy to spot. If a subdomain is only detected by `Whatweb`, just take a quick look at the site's actual technologies to verify.
 
-# 🙋‍♂️ Pull Requests
+## 🙋‍♂️ Pull Requests
 Feel free to submit pull requests with new checks or improvements.
 
-# 📽️ Video
+## 📽️ Video
 
 <p align="center">
   <img src= https://github.com/user-attachments/assets/7633ed26-8ddb-447e-a04c-c29abb6851d0 alt="Demo" width="700"/>
