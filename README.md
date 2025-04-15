@@ -50,10 +50,12 @@ python cloud_detective.py <subdomains.txt>
 python cloud_detective.py <subdomains.txt> -d 1.1.1.1
 # Custom workers
 python cloud_detective.py <subdomains.txt> -w 15
+# Disable discovery over certain cloud providers
+python cloud_detective.py -w 10 --disable-azure --disable-gcp <subdomains.txt>
+
 
 # Summary
-cloud_detective.py [-h] [-d DNS] [-w WORKERS] [-o OUTPUT] files [files ...]
-
+cloud_detective.py [-h] [-d DNS] [-w WORKERS] [-o OUTPUT] [--disable-azure] [--disable-gcp] [--disable-aws] files [files ...]
 ```
 
 ## ⚠️ Known Issues

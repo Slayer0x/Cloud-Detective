@@ -15,8 +15,6 @@ output_file = None
 shutdown_event = Event()
 
 def banner():
-    
-    
     colors = cycle(["[bold blue]", "[bold green]", "[bold orange1]", "[bold red]"])
     banner_blocks = [
         "\n"
@@ -81,7 +79,6 @@ def add_message(message):
                                       .replace("[bold green]", "").replace("[/bold green]", "")
                 f.write(clean_message + "\n")
 
-# Functions for querying and checking IPs (same as before)
 def get_ip_ranges(url, key):
     try:
         data = json.loads(urlopen(url).read())
@@ -119,7 +116,8 @@ def is_target_ip(ip, ip_ranges):
         add_message(f"[bold red][!] Error checking IP: {e}[/bold red]")
         return False
 
-def check_domain(domain, azure_ranges, google_ranges, aws_ranges, dns_server=None):
+def check_domain(domain, azure_ranges, google_ranges, aws_ranges, dns_server=None, 
+                disable_azure=False, disable_gcp=False, disable_aws=False):
     if shutdown_event.is_set():
         return
     
@@ -135,11 +133,11 @@ def check_domain(domain, azure_ranges, google_ranges, aws_ranges, dns_server=Non
             if shutdown_event.is_set():
                 return
             ip_str = ip.to_text()
-            if is_target_ip(ip_str, azure_ranges):
+            if not disable_azure and is_target_ip(ip_str, azure_ranges):
                 add_message(f"[cyan]{domain} -> {ip_str} (Azure IP)[/cyan]")
-            if is_target_ip(ip_str, google_ranges):
+            if not disable_gcp and is_target_ip(ip_str, google_ranges):
                 add_message(f"[green]{domain} -> {ip_str} (Google Cloud IP)[/green]")
-            if is_target_ip(ip_str, aws_ranges):
+            if not disable_aws and is_target_ip(ip_str, aws_ranges):
                 add_message(f"[yellow]{domain} -> {ip_str} (AWS IP)[/yellow]")
     except dns.exception.DNSException:
         pass
@@ -151,11 +149,11 @@ def check_domain(domain, azure_ranges, google_ranges, aws_ranges, dns_server=Non
             if shutdown_event.is_set():
                 return
             cname_str = cname.to_text()
-            if is_target_domain(cname_str, AZURE_DOMAINS):
+            if not disable_azure and is_target_domain(cname_str, AZURE_DOMAINS):
                 add_message(f"[cyan]{domain} -> {cname_str} (Azure CNAME)[/cyan]")
-            if is_target_domain(cname_str, GOOGLE_DOMAINS):
+            if not disable_gcp and is_target_domain(cname_str, GOOGLE_DOMAINS):
                 add_message(f"[green]{domain} -> {cname_str} (Google Cloud CNAME)[/green]")
-            if is_target_domain(cname_str, AWS_DOMAINS):
+            if not disable_aws and is_target_domain(cname_str, AWS_DOMAINS):
                 add_message(f"[yellow]{domain} -> {cname_str} (AWS CNAME)[/yellow]")
     except dns.exception.DNSException:
         pass
@@ -166,11 +164,11 @@ def check_domain(domain, azure_ranges, google_ranges, aws_ranges, dns_server=Non
             return
         result = subprocess.run(["whatweb", domain], capture_output=True, text=True, timeout=20)
         output = result.stdout.lower()
-        if "azure" in output:
+        if not disable_azure and ("azure" in output):
             add_message(f"[cyan]{domain} -> (Detected as Azure by WhatWeb)[/cyan]")
-        if "google" in output or "gcp" in output:
+        if not disable_gcp and ("google" in output or "gcp" in output):
             add_message(f"[green]{domain} -> (Detected as Google Cloud by WhatWeb)[/green]")
-        if "aws" in output or "amazon" in output:
+        if not disable_aws and ("aws" in output or "amazon" in output):
             add_message(f"[yellow]{domain} -> (Detected as AWS by WhatWeb)[/yellow]")
     except FileNotFoundError:
         add_message("[bold red][X] Error: WhatWeb not found. Make sure it is installed and in the PATH.[/bold red]")
@@ -187,6 +185,9 @@ def main():
     parser.add_argument('-d', '--dns', help="Custom DNS server to use for resolution (not required)")
     parser.add_argument('-w', '--workers', type=int, default=10, help="Number of worker threads to use for scanning (default is 10)")
     parser.add_argument('-o', '--output', help="Output file to save results")
+    parser.add_argument('--disable-azure', action='store_true', help="Disable Azure checks")
+    parser.add_argument('--disable-gcp', action='store_true', help="Disable Google Cloud checks")
+    parser.add_argument('--disable-aws', action='store_true', help="Disable AWS checks")
 
     args = parser.parse_args()
 
@@ -194,6 +195,9 @@ def main():
     filenames = args.files
     num_workers = args.workers
     output_file = args.output
+    disable_azure = args.disable_azure
+    disable_gcp = args.disable_gcp
+    disable_aws = args.disable_aws
 
     # Clear output file if it exists
     if output_file:
@@ -210,9 +214,29 @@ def main():
 
     # Get IP ranges once at the start
     add_message("[bold blue][*] Loading IP ranges...[/bold blue]")
-    azure_ip_ranges = get_azure_ip_ranges()
-    google_ip_ranges = get_ip_ranges(IPRANGE_URLS["cloud"], "ipv4Prefix") + get_ip_ranges(IPRANGE_URLS["google"], "ipv4Prefix")
-    aws_ip_ranges = get_ip_ranges(IPRANGE_URLS["aws"], "ip_prefix")
+    
+    azure_ip_ranges = []
+    google_ip_ranges = []
+    aws_ip_ranges = []
+    
+    if not disable_azure:
+        azure_ip_ranges = get_azure_ip_ranges()
+    if not disable_gcp:
+        google_ip_ranges = get_ip_ranges(IPRANGE_URLS["cloud"], "ipv4Prefix") + get_ip_ranges(IPRANGE_URLS["google"], "ipv4Prefix")
+    if not disable_aws:
+        aws_ip_ranges = get_ip_ranges(IPRANGE_URLS["aws"], "ip_prefix")
+    
+    # Show disabled providers
+    disabled_providers = []
+    if disable_azure:
+        disabled_providers.append("Azure")
+    if disable_gcp:
+        disabled_providers.append("Google Cloud")
+    if disable_aws:
+        disabled_providers.append("AWS")
+    
+    if disabled_providers:
+        add_message(f"[yellow][*] Disabled providers:[/yellow] {', '.join(disabled_providers)}")
     
     add_message(f"[bold green][*] Starting scan for {len(domains)} domains[/bold green]")
     
@@ -237,7 +261,10 @@ def main():
                     azure_ip_ranges, 
                     google_ip_ranges, 
                     aws_ip_ranges, 
-                    dns_server
+                    dns_server,
+                    disable_azure,
+                    disable_gcp,
+                    disable_aws
                 ): domain for domain in domains
             }
             
